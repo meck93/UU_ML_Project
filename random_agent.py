@@ -2,7 +2,7 @@
 
 import retro
 import gym
-from action_space import make_custom_env
+from environment import make_custom_env
 
 
 def main():
@@ -27,6 +27,12 @@ def main():
     cur_nr_lives = int(init_data['lives'])
 
     print("Initial State of Mario:", init_data)
+
+    action_size = env.action_space.n
+    print("Action size ", action_size)
+
+    state_size = env.observation_space
+    print("State size ", state_size)
 
     while True:
         # choose a random action
