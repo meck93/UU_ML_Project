@@ -1,5 +1,9 @@
-# UU_ML_Project
+# UU_ML_Project - NEAT branch
 Uppsala University - ML - Project
+
+
+## Be aware that this uses the gym_super_mario_bros module :/
+The tutorial I followed uses the data.json file that's complementary to the game, and the one we are using in Master and Q-learn does not have the x-axis position in it 
 
 ## Install
 - python setup.py
