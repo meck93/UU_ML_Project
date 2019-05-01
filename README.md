@@ -12,7 +12,7 @@ Found a way to get the x-position for  Super Mario Brothers 3 -NES, see set-up.
     You can safely replace the data.json you have in the folder that looks something like: ~/<ENVIRONMENT>/lib/python3.7/site-packages/retro/data/stable/SuperMarioBros3-Nes
 I don't know how the new scenario file affects RL.
 
-###OLD instructions
+### OLD instructions
 -  python setup.py
 - Try if it worked by running:
     - python -m retro.examples.interactive --game SuperMarioBros3-Nes
