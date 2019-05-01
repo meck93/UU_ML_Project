@@ -1,0 +1,16 @@
+{
+  "done": {
+    "variables": {
+      "lives": {
+        "op": "negative"
+      }
+    }
+  },
+  "reward": {
+    "variables": {
+      "xpos": {
+        "reward": 1
+      }
+    }
+  }
+}
