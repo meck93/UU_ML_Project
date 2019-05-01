@@ -10,8 +10,8 @@ Found a way to get the x-position for  Super Mario Brothers 3 -NES, see set-up.
     - data.json now has the x-position and x-position multiplier (x-pos, resets fr 255 to 0 when moving far enought o the right)
     - scenario.json now rewards improved x-position, not increased score
     
-You can safely replace the data.json you have in the folder that looks something like: ~/<ENVIRONMENT>/lib/python3.7/site-packages/retro/data/stable/SuperMarioBros3-Nes
-I don't know how the new scenario file affects RL.
+You can safely replace the data.json you have in the folder that looks something like: ~/<ENVIRONMENT>/lib/python3.7/site-packages/retro/data/stable/SuperMarioBros3-Nes.
+** I don't know if/how the new scenario file affects RL.**
 
 ### OLD instructions
 -  python setup.py
