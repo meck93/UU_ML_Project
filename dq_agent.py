@@ -58,7 +58,7 @@ class DQNAgent:
         if np.random.rand() <= self.epsilon:
             return random.randrange(self.action_size)
         else:
-            act_values = self.model.predict(np.array(state))
+            act_values = self.model.predict(np.expand_dims(np.array(state), axis=0))
             return np.argmax(act_values[0])
 
     # TODO: Reshape the state array to the correct dimensions
@@ -66,15 +66,15 @@ class DQNAgent:
         minibatch = random.sample(self.memory, batch_size)
 
         for state, action, reward, next_state, done in minibatch:
-            target = self.model.predict(np.array(state))
+            target = self.model.predict(np.expand_dims(np.array(state), axis=0))
 
             if done:
                 target[0][action] = reward
             else:
-                t = self.model.predict(np.array(next_state))[0]
+                t = self.model.predict(np.expand_dims(np.array(next_state), axis=0))[0]
                 target[0][action] = reward + self.gamma * np.amax(t)
 
-            self.model.fit(np.array(state), target, epochs=1, verbose=0)
+            self.model.fit(np.expand_dims(np.array(state), axis=0), target, epochs=1, verbose=0)
 
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
@@ -84,10 +84,12 @@ class DQNAgent:
 def main():
     total_episodes = 50
     max_steps = 50000
-    batch_size = 64
+    batch_size = 16
     episode_render = True
+
     env = environment.make_custom_env(disc_acts=True)
     agent = DQNAgent([96,96,4], env.action_space.n)
+
 
     for episode in range(total_episodes):
         step = 0
