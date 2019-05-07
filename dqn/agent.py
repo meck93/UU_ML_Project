@@ -4,6 +4,10 @@ import random
 import gym
 import retro
 
+# openai baselines
+from baselines.common.schedules import LinearSchedule
+from baselines.deepq.replay_buffer import ReplayBuffer, PrioritizedReplayBuffer
+
 # hyper parameters
 from config import *
 
@@ -36,7 +40,7 @@ class Agent:
         self.memory = ReplayMemory(max_size=memory_size)
 
         # saver will help us save our model
-        self.saver = tf.train.Saver()
+        self.saver = tf.train.Saver(save_relative_paths=True)
 
         # setup tensorboard writer
         self.writer = tf.summary.FileWriter("logs/{}/".format(self.level_name))
@@ -45,10 +49,17 @@ class Agent:
         tf.summary.scalar("Loss", self.DQNetwork.loss)
         self.write_op = tf.summary.merge_all()
 
+        # set the initial number of lives
+        self.lives = 4
+
         # initialize the memory
         for i in range(pretrain_length):
-            # If it's the first step
             if i == 0:
+                print("Initializing Memory with {} experiences!".format(pretrain_length))
+                # initialize the x0 - previous position - to 24 (initial position)
+                x0 = 24
+
+                # reset the environment
                 state = self.env.reset()
 
             # Get next state, the rewards, done by taking a random action
@@ -56,22 +67,27 @@ class Agent:
             action = self.possible_actions[choice]
             next_state, reward, done, info = self.env.step(choice)
 
-            # set the initial number of lives
-            self.lives = int(info['lives'])
+            # compute the current x_position
+            x1 = self._current_xpos(int(info['xpos']), int(info['xpos_multiplier']))
 
-            # if the episode is finished (we're dead)
-            if done:
+            # compute the positional reward
+            x0, reward = self.x_pos_reward(x1, x0, reward)
+
+            # check if Mario is still alive
+            killed, reward = self.check_killed(int(info['lives']), reward)
+
+            if done or killed:
                 # we inished the episode
                 next_state = np.zeros((WIDTH, HEIGHT, N_FRAMES), dtype=np.int)
-                print("Next State Shape:", next_state.shape)
-                state = np.array(state)
-                print("State Shape:", state.shape)
 
                 # add experience to memory
                 self.memory.add((state, action, reward, next_state, done))
 
                 # start a new episode
                 state = self.env.reset()
+
+                # reset x0 - previous position - to 24 (initial position)
+                x0 = 24
             else:
                 # add experience to memory
                 self.memory.add((state, action, reward, next_state, done))
@@ -108,31 +124,37 @@ class Agent:
             total_test_rewards = []
 
             # Load the model
-            self.saver.restore(sess, "models/{0}.cpkt".format(self.level_name))
+            path = "./models/{}/".format(self.level_name)
+            self.saver = tf.train.import_meta_graph("{}-4.meta".format(path))
+            self.saver.restore(sess, tf.train.latest_checkpoint(path))
 
-            for episode in range(4):
+            for episode in range(1):
                 total_rewards = 0
+                step = 0
 
                 state = self.env.reset()
 
                 print("****************************************************")
                 print("EPISODE ", episode)
 
-                while True:
+                while step < MAX_STEPS:
+                    step += 1
+
                     # transform LazyFrames into np array [None, HEIGHT, WIDTH, N_FRAMES]
                     state = np.array(state)
 
-                    # Reshape the state
-                    state = state.reshape((1, *state_size))
-
                     # Get action from Q-network: estimate the Qs values state
-                    Qs = sess.run(self.DQNetwork.output, feed_dict={self.DQNetwork.inputs_: state})
+                    Qs = sess.run(self.DQNetwork.output, feed_dict={
+                                  self.DQNetwork.inputs_: state.reshape((1, *state_size))})
 
                     # Take the biggest Q value (= the best action)
                     choice = np.argmax(Qs)
+                    print(step, choice, Qs)
 
                     # Perform the action and get the next_state, reward, and done information
                     next_state, reward, done, info = self.env.step(choice)
+
+                    # render the current state
                     self.env.render()
 
                     total_rewards += reward
@@ -143,6 +165,7 @@ class Agent:
                         break
 
                     state = next_state
+
             self.env.close()
 
     def train(self):
@@ -157,15 +180,20 @@ class Agent:
                 # set step to 0
                 step = 0
 
-                # initialize the x_position to 0
-                x_pos_tracker = 0
+                # initialize the stuck_pos_cp to 24 (initial position)
+                stuck_pos_cp = 24
 
-                # initialize killed and stuck to False
-                killed = False
+                # initialize the x0 - previous position - to 24 (initial position)
+                x0 = 24
+
+                # initialize stuck to False
                 stuck = False
 
                 # initialize rewards of episode
                 episode_rewards = []
+
+                # initialize episode loss
+                episode_loss = []
 
                 # make a new episode and observe the first state
                 state = self.env.reset()
@@ -185,34 +213,32 @@ class Agent:
                     # perform the action and get the next_state, reward, and done information
                     next_state, reward, done, info = self.env.step(choice)
 
-                    # add the reward to total reward
-                    episode_rewards.append(reward)
-
                     if episode_render:
                         self.env.render()
 
-                    # check the x_position of Mario every 500 steps to see if he's stuck
-                    if step % STUCK_STEPS == 0:
-                        # compute the current x_position of Mario
-                        # x_pos + 255*xpos_multiplier since x_pos only goes from 0 to 255
-                        new_x_pos = int(info['xpos']) + int(info['xpos_multiplier'])*255
+                    print(info['time'])
 
-                        if new_x_pos == x_pos_tracker:
-                            print("Mario is stuck! Restarting!")
-                            stuck = True
-                        else:
-                            x_pos_tracker = new_x_pos
+                    # compute the current x_position
+                    x1 = self._current_xpos(int(info['xpos']), int(info['xpos_multiplier']))
+
+                    # compute the positional reward
+                    x0, reward = self.x_pos_reward(x1, x0, reward)
+
+                    # check if Mario is stuck
+                    if step % STUCK_STEPS == 0:
+                        stuck, reward = self.check_stuck(x1, stuck_pos_cp, reward)
 
                     # check if Mario is still alive
-                    if int(info['lives']) != self.lives:
-                        print("Mario has died! Restarting!")
-                        killed = True
+                    killed, reward = self.check_killed(int(info['lives']), reward)
 
                     # check if Mario has finished the level
                     if done:
-                        print("Episode ended!")
+                        print("\tEpisode ended!")
 
-                    if done or killed or stuck:
+                    # add the reward to total reward
+                    episode_rewards.append(reward)
+
+                    if killed or stuck or done or step == MAX_STEPS:
                         # the episode ends so no next state
                         next_state = np.zeros((WIDTH, HEIGHT, N_FRAMES), dtype=np.int)
 
@@ -221,11 +247,10 @@ class Agent:
 
                         # get total reward of the episode
                         total_reward = np.sum(episode_rewards)
+                        average_loss = np.mean(episode_loss)
 
                         print("Episode:", episode, "Total reward:", total_reward,
-                              "Explore P:", explore_probability, "Training Loss:", loss)
-
-                        # rewards_list.append((episode, total_reward))
+                              "Explore P:", explore_probability, "Average Training Loss:", average_loss)
 
                         # store transition <s_i, a, r_{i+1}, s_{i+1}> in memory
                         self.memory.add((state, action, reward, next_state, done))
@@ -262,6 +287,9 @@ class Agent:
                                                                                                    self.DQNetwork.target_Q: targets_mb,
                                                                                                    self.DQNetwork.actions_: actions})
 
+                    # store loss
+                    episode_loss.append(loss)
+
                     # write tf summaries
                     summary = sess.run(self.write_op, feed_dict={self.DQNetwork.inputs_: states_t,
                                                                  self.DQNetwork.target_Q: targets_mb,
@@ -271,5 +299,72 @@ class Agent:
 
                 # save model every 5 episodes
                 if episode % 5 == 0:
-                    self.saver.save(sess, "models/{0}.cpkt".format(self.level_name))
+                    self.saver.save(sess, "./models/{0}/".format(self.level_name), global_step=episode)
                     print("Model Saved")
+
+    def _current_xpos(self, xpos, xpos_multiplier):
+        """
+        Compute the current position of Mario.
+
+        Inputs:
+        - xpos: x_position (from 0 to 255)
+        - xpos_multiplier: how many times the xpos has been looped 
+
+        Returns:
+        - current x_position
+        """
+        return xpos + xpos_multiplier*255
+
+    def x_pos_reward(self, x1, x0, reward):
+        """
+        Computes the positional reward; reward = x1 - x0
+        - x1: current position
+        - x0: previous position
+
+        Returns:
+        - new previous position x0 = x1
+        - update reward
+        """
+        reward = x1 - x0
+        return x1, reward
+
+    def check_stuck(self, xpos, stuck_pos_cp, reward):
+        """
+        Checks if Mario is stuck i.e. Mario's xpos has not changed since the last check.
+
+        Inputs:
+        - xpos: Mario's current x_position
+        - stuck_pos_cp: Mario's x_position at the last check.
+        - reward: the current step's reward
+
+        Returns: 
+        - stuck: bool - True if Mario's x_position hasn't changed
+        - reward: float - updated reward
+        """
+        stuck = False
+        if xpos == stuck_pos_cp:
+            reward = 0
+            stuck = True
+            print("\tMario is stuck! Restarting!", reward)
+
+        return stuck, reward
+
+    def check_killed(self, curr_n_lives, reward):
+        """        
+        Checks if Mario has died. If so adjusts the reward.
+
+        Inputs:
+        - curr_n_lives: Mario's current number of lives
+        - reward: the current step's reward
+
+        Returns: 
+        - killed: bool - True if Mario's has died.
+        - reward: float - updated reward
+        """
+        killed = False
+        if curr_n_lives != self.lives:
+            reward = PENALTY_DYING  # update reward with dying penalty
+            killed = True
+            print("\tMario died! Restarting!", reward)
+
+        return killed, reward

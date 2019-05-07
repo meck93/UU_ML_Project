@@ -17,7 +17,6 @@ class DQNetwork:
             # remember that target_Q is the R(s,a) + ymax Qhats(s', a')
             self.target_Q = tf.placeholder(tf.float32, [None], name="target")
 
-            # input is 90x96x4
             self.conv1 = tf.layers.conv2d(inputs=self.inputs_, filters=32, kernel_size=[8, 8], strides=[4, 4],
                                           padding="VALID",                                                                     kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(), name="conv1")
             self.conv1_out = tf.nn.elu(self.conv1, name="conv1_out")
