@@ -50,7 +50,8 @@ class MarioDiscretizer(gym.ActionWrapper):
 
         # Custom discrete actions defined by ourselves
         # Limits the number of possible actions and should improve training time
-        actions = [[None], ['LEFT'], ['RIGHT'], ['RIGHT', 'A'], ['RIGHT', 'B'], ['RIGHT', 'A', 'B'], ['A'], ['A', 'A']]
+        # actions = [[None], ['LEFT'], ['RIGHT'], ['RIGHT', 'A'], ['RIGHT', 'B'], ['RIGHT', 'A', 'B'], ['A'], ['A', 'A']]
+        actions = [[None], ['LEFT'], ['RIGHT'], ['RIGHT', 'A'], ['A'], ['A', 'A']]
         self._actions = []
 
         for action in actions:
@@ -70,7 +71,7 @@ def make_custom_env(disc_acts=True):
     """
     Create an environment with some standard wrappers.
     """
-    env = retro.make(game='SuperMarioBros3-Nes', state="1Player.World1.Level1.state")
+    env = retro.make(game='SuperMarioBros3-Nes', state="1Player.World1.Level1.state", scenario="./data/scenario.json")
 
     if disc_acts:
         # Build the actions array
