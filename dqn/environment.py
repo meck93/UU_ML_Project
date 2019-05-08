@@ -1,17 +1,15 @@
 #!/usr/bin/env python
 
-import numpy as np
 import gym
+import numpy as np
 import retro
-
 # This will be useful for stacking frames
 from baselines.common.atari_wrappers import FrameStack
 
-# hyperparameters
-from config import HEIGHT, WIDTH, N_FRAMES
-
-
 import cv2
+# hyperparameters
+from config import HEIGHT, N_FRAMES, WIDTH
+
 cv2.ocl.setUseOpenCL(False)
 
 
@@ -71,7 +69,8 @@ def make_custom_env(disc_acts=True):
     """
     Create an environment with some standard wrappers.
     """
-    env = retro.make(game='SuperMarioBros3-Nes', state="1Player.World1.Level1.state", scenario="./data/scenario.json")
+    env = retro.make(game='SuperMarioBros3-Nes', state="1Player.World1.Level1.state",
+                     scenario="./data/scenario.json", record="./recordings/")
 
     if disc_acts:
         # Build the actions array
