@@ -82,9 +82,9 @@ class Agent:
             # check if Mario is still alive
             killed, reward = self.check_killed(int(info['lives']), reward)
 
-            if done or killed:
+            if done or killed or stuck:
                 # we inished the episode
-                next_state = np.zeros((WIDTH, HEIGHT, N_FRAMES), dtype=np.int)
+                next_state = np.zeros((HEIGHT, WIDTH, N_FRAMES), dtype=np.int)
 
                 # add experience to memory
                 self.memory.add(state, action, reward, next_state, done)
@@ -197,7 +197,7 @@ class Agent:
             t = 0
 
             # score tracker
-            score_tracker = {}
+            score_tracker = []
 
             for episode in range(TOTAL_EPISODES):
                 # set step to 0
@@ -261,12 +261,16 @@ class Agent:
                     if step == MAX_STEPS:
                         print("\tMax Steps per Episode reached.")
 
+                    # TODO: implement time penality for taking too long....
+                    if t % 10 == 0:
+                        reward -= 1.0
+
                     # add the reward to total reward
                     episode_rewards.append(reward)
 
                     if killed or stuck or done or step == MAX_STEPS:
                         # the episode ends so no next state
-                        next_state = np.zeros((WIDTH, HEIGHT, N_FRAMES), dtype=np.int)
+                        next_state = np.zeros((HEIGHT, WIDTH, N_FRAMES), dtype=np.int)
 
                         # set step = MAX_STEPS to end episode
                         step = MAX_STEPS
@@ -275,11 +279,11 @@ class Agent:
                         total_reward = np.sum(episode_rewards)
                         average_loss = np.mean(episode_loss)
 
-                        print("Episode:", episode, "Total reward:", total_reward,
+                        print("Episode:", episode, "Total Steps:", t, "Total reward:", total_reward,
                               "Explore P:", explore_probability, "Average Training Loss:", average_loss)
 
                         # remember the episode and the score
-                        score_tracker[episode] = total_reward
+                        score_tracker.append({"episode": episode, "reward": total_reward, "xpos": x0})
 
                         # store transition <s_i, a, r_{i+1}, s_{i+1}> in memory
                         self.memory.add(state, action, reward, next_state, done)
@@ -342,9 +346,10 @@ class Agent:
                     self.saver.save(sess, "./models/{0}/".format(self.level_name), global_step=episode)
                     print("Model Saved")
 
-            sorted_scores = sorted(score_tracker.items(), key=lambda kv: (kv[1], kv[0]), reverse=True)
-            print(sorted_scores)
-            print("Best Score: {} achieved in Epsiode: {}".format(sorted_scores[0][1], sorted_scores[0][0]))
+            sorted_scores = sorted(score_tracker, key=lambda ele: ele['xpos'], reverse=True)
+            print("Sorted according to MAX XPOS\n", sorted_scores)
+            sorted_scores = sorted(score_tracker, key=lambda ele: ele['reward'], reverse=True)
+            print("Sorted according to MAX REWARD\n", sorted_scores)
             self.env.close()
 
     def _current_xpos(self, xpos, xpos_multiplier):
@@ -353,7 +358,7 @@ class Agent:
 
         Inputs:
         - xpos: x_position (from 0 to 255)
-        - xpos_multiplier: how many times the xpos has been looped 
+        - xpos_multiplier: how many times the xpos has been looped
 
         Returns:
         - current x_position
@@ -370,7 +375,7 @@ class Agent:
         - new previous position x0 = x1
         - update reward
         """
-        reward = x1 - x0
+        reward += x1 - x0
         return x1, reward
 
     def check_stuck(self, xpos, stuck_pos_cp, reward):
@@ -382,7 +387,7 @@ class Agent:
         - stuck_pos_cp: Mario's x_position at the last check.
         - reward: the current step's reward
 
-        Returns: 
+        Returns:
         - stuck: bool - True if Mario's x_position hasn't changed
         - reward: float - updated reward
         """
@@ -395,14 +400,14 @@ class Agent:
         return stuck, reward
 
     def check_killed(self, curr_n_lives, reward):
-        """        
+        """
         Checks if Mario has died. If so adjusts the reward.
 
         Inputs:
         - curr_n_lives: Mario's current number of lives
         - reward: the current step's reward
 
-        Returns: 
+        Returns:
         - killed: bool - True if Mario's has died.
         - reward: float - updated reward
         """

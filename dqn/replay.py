@@ -27,8 +27,12 @@ def replay(recording):
 
 
 if __name__ == "__main__":
-    recording = RECORDING_NAME
-    replay(recording)
+    run = "Prio6"
+    numbers = [499]
+    # recording = RECORDING_NAME
+    for number in numbers:
+        recording = './recordings/{}/SuperMarioBros3-Nes-1Player.World1.Level1-000{}.bk2'.format(run, str(number))
+        replay(recording)
 
     # to convert the movie .bk2 into a mp4 video, run the following on the command line:
     # python -m retro.scripts.playback_movie path_to_recording

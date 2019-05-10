@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 import gym
 import numpy as np
 import retro
@@ -22,15 +20,16 @@ class PreprocessFrames(gym.ObservationWrapper):
         self.observation_space = gym.spaces.Box(low=0, high=255, shape=(self.height, self.width, 1), dtype=np.uint8)
 
     def observation(self, frame):
+        # transform color to grayscale
         frame_gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
 
         # crop the image top and bottom since it's static
-        frame_cropped = frame_gray[40:-10, :]
+        frame_cropped = frame_gray[9:-35, :]
 
         # normalize the values to range [0,1]
         frame_normalized = frame_cropped / 255.0
 
-        # resize the cropped image to HEIGHTxWIDTH
+        # resize the cropped image to WIDTHxHEIGHT
         frame = cv2.resize(frame_normalized, (self.width, self.height), interpolation=cv2.INTER_AREA)
         return frame[:, :, None]
 
