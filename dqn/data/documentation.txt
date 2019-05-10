@@ -1,0 +1,54 @@
+Documentation: Run1
+- Learns to avoid first enemy after 5 epsiodes (playing level 5x)
+- Stuck at first object for 10-15 episodes
+
+Run 3: Prio3
+- 200 episodes
+- max steps 10000
+- stuck: 1000
+- batch size: 32
+- memory: 50'000
+- xpos reward: custom (dying = -15.0)
+- gamma: 0.95
+
+Documentation: Run3
+- best result: 1606
+- not enough penatly for dying. Mario dies too often and doesn't care.
+- not enough training time.
+
+Run 3: Prio4
+- 600 episodes
+- max steps 10000
+- stuck: 1000
+- batch size: 32
+- memory: 50'000
+- xpos reward: custom (dying = -50.0)
+- gamma: 0.95
+
+Documentation: Run4
+- 
+
+Run: Prio5
+- 600 episodes
+- max steps 10000
+- stuck: 1000
+- batch size: 32
+- memory: 60'000
+- xpos reward: custom (dying = -100.0)
+- gamma: 0.97
+
+Documentation: Prio5
+- 
+
+Run: Prio5
+- 500 episodes
+- max steps 10000
+- stuck: 1000
+- batch size: 32
+- memory: 50'000
+- xpos reward: custom (dying = -50.0)
+- gamma: 0.95
+- coins + killing only gives +10.0 reward (up and until now it was +100.0)
+
+Documentation: Prio5
+- 
