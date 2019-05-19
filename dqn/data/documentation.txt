@@ -25,9 +25,6 @@ Run 3: Prio4
 - xpos reward: custom (dying = -50.0)
 - gamma: 0.95
 
-Documentation: Run4
-- 
-
 Run: Prio5
 - 600 episodes
 - max steps 10000
@@ -37,10 +34,7 @@ Run: Prio5
 - xpos reward: custom (dying = -100.0)
 - gamma: 0.97
 
-Documentation: Prio5
-- 
-
-Run: Prio5
+Run: Prio6
 - 500 episodes
 - max steps 10000
 - stuck: 1000
@@ -50,5 +44,50 @@ Run: Prio5
 - gamma: 0.95
 - coins + killing only gives +10.0 reward (up and until now it was +100.0)
 
-Documentation: Prio5
-- 
+Run: Prio7
+- 500 episodes
+- max steps 7500
+- stuck: 1000
+- batch size: 32
+- memory: 100'000
+- xpos reward: custom (dying = -50.0)
+- gamma: 0.99
+- coins + killing only gives +10.0 reward (up and until now it was +100.0)
+- linear schedule exploration rate
+- time penality every 10 steps 
+
+Run: Prio8
+- 500 episodes
+- max steps 7500
+- stuck: 1000
+- batch size: 32
+- memory: 50'000
+- xpos reward: custom (dying = -50.0)
+- gamma: 0.99
+- coins + killing only gives +10.0 reward (up and until now it was +100.0)
+- linear schedule exploration rate
+- time penality every 50 steps 
+
+Run: Prio9
+- 500 episodes
+- max steps 7500
+- stuck: 1000
+- batch size: 32
+- memory: 50'000
+- xpos reward: custom (dying = -50.0)
+- gamma: 0.99
+- coins + killing only gives +10.0 reward (up and until now it was +100.0)
+- linear schedule exploration rate
+- time penality every 50 steps 
+
+Run: Prio10
+- 500 episodes
+- max steps 7500
+- stuck: 1000
+- batch size: 32
+- memory: 50'000
+- xpos reward: custom (dying = -50.0)
+- gamma: 0.95
+- coins + killing only gives +5.0 reward (up and until now it was +100.0)
+- linear schedule exploration rate
+- time penality every 50 steps 

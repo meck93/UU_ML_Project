@@ -1,12 +1,10 @@
 import gym
 import numpy as np
 import retro
-# This will be useful for stacking frames
 from baselines.common.atari_wrappers import FrameStack
 
 import cv2
-# hyperparameters
-from config import HEIGHT, N_FRAMES, WIDTH
+from config import HEIGHT, N_FRAMES, WIDTH  # hyperparameters
 
 cv2.ocl.setUseOpenCL(False)
 
@@ -82,3 +80,47 @@ def make_custom_env(disc_acts=True):
     env = FrameStack(env, N_FRAMES)
 
     return env
+
+# TODO: code that can be used to plot the preprocessing
+# import matplotlib.pyplot as plt
+# f, axs = plt.subplots(2, 2, figsize=(15, 15))
+# axs[0, 0].set_title("Raw Input Image")
+# axs[0, 0].imshow(frame)
+# axs[0, 0].set_ylim((224, 0))
+# axs[0, 0].set_yticks(np.arange(0, 225, 224//16))
+# axs[0, 0].set_xlim((0, 240))
+# axs[0, 0].set_xticks(np.arange(0, 241, 240//16))
+
+# # transform color to grayscale
+# frame_gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+
+# axs[0, 1].set_title("Gray-Scale Image")
+# axs[0, 1].imshow(frame_gray, cmap="gray", vmin=0, vmax=255)
+# axs[0, 1].set_ylim((224, 0))
+# axs[0, 1].set_yticks(np.arange(0, 225, 224//16))
+# axs[0, 1].set_xlim((0, 240))
+# axs[0, 1].set_xticks(np.arange(0, 241, 240//16))
+
+# # crop the image top and bottom since it's static
+# frame_cropped = frame_gray[9:-35, :]
+
+# axs[1, 0].set_title("Cropped Image")
+# axs[1, 0].imshow(frame_cropped, cmap="gray", vmin=0, vmax=255)
+# axs[1, 0].set_ylim((224, 0))
+# axs[1, 0].set_yticks(np.arange(0, 225, 224//16))
+# axs[1, 0].set_xlim((0, 240))
+# axs[1, 0].set_xticks(np.arange(0, 241, 240//16))
+
+# # normalize the values to range [0,1]
+# frame_normalized = frame_cropped / 255.0
+
+# # resize the cropped image to WIDTHxHEIGHT
+# frame = cv2.resize(frame_normalized, (self.width, self.height), interpolation=cv2.INTER_AREA)
+
+# axs[1, 1].set_title("Downsized Image")
+# axs[1, 1].imshow(frame, cmap="gray", vmin=0, vmax=1)
+# axs[1, 1].set_ylim((84, 0))
+# axs[1, 1].set_yticks(np.arange(0, 85, 84//7))
+# axs[1, 1].set_xlim((0, 84))
+# axs[1, 1].set_xticks(np.arange(0, 85, 84//7))
+# plt.show()
