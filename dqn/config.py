@@ -22,7 +22,8 @@ DECAY_RATE = 0.00001  # exponential decay rate for exploration prob
 DECAY_STEPS = TOTAL_TIMESTEPS//5
 
 # Q learning hyperparameters
-gamma = 0.95  # discounting rate
+GAMMA = 0.95  # discounting rate
+MAX_TAU = 10000  # Tau is the C step where we update our target network
 
 # reward parameters
 # mostly in OpenAI's scenario.json file
@@ -31,7 +32,7 @@ TIME_DECAY_PENALTY = 50
 
 # memory
 # number of experiences stored in the memory when initialized
-pretrain_length = batch_size * 128
+pretrain_length = batch_size * 64
 memory_size = 50000  # total number of experiences the memory can keep
 
 # prioritized experience replay parameters
@@ -44,4 +45,4 @@ REPLAY_EPS = 1e-6
 stack_size = 4
 
 # turn this to true if you want to render the environment during training
-episode_render = False
+episode_render = True

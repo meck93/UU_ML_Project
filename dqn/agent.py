@@ -9,7 +9,7 @@ from baselines.deepq.replay_buffer import PrioritizedReplayBuffer
 
 from config import *
 from environment import make_custom_env  # custom Mario environment
-from model import DQNetworkPrio
+from model import DDQNPrio
 from utils import ReplayMemory
 
 
@@ -28,7 +28,10 @@ class Agent:
         tf.reset_default_graph()
 
         # instantiate the DQNetwork
-        self.DQNetwork = DQNetworkPrio(state_size, self.env.action_space.n, learning_rate)
+        self.DQNetwork = DDQNPrio(state_size, self.env.action_space.n, learning_rate, name="DDQNPrio")
+
+        # instantiate the TargetNetwork
+        self.TargetNetwork = DDQNPrio(state_size, self.env.action_space.n, learning_rate, name="TargetNetwork")
 
         # instantiate a linear decay schedule for the exploration rate
         self.epsilon_schedule = LinearSchedule(DECAY_STEPS, initial_p=EXPLORE_START, final_p=EXPLORE_STOP)
@@ -140,8 +143,13 @@ class Agent:
             # initialize the variables
             sess.run(tf.global_variables_initializer())
 
-            # initialize decay step (that will be used to reduce epsilon)
+            # initialize decay step and tau
             t = 0
+            tau = 0
+
+            # Update the parameters of our TargetNetwork with DQN_weights
+            update_target = self.update_target_graph()
+            sess.run(update_target)
 
             # score tracker
             score_tracker = []
@@ -178,6 +186,7 @@ class Agent:
                 while step < MAX_STEPS:
                     step += 1
                     t += 1
+                    tau += 1
 
                     # predict an action
                     action, choice, explore_probability = self.predict_action(sess, state, self.possible_actions, t)
@@ -250,19 +259,32 @@ class Agent:
 
                     target_Qs_batch = []
 
-                    # get Q values for the states_tp1 (next states)
-                    Qs_next_state = sess.run(self.DQNetwork.output, feed_dict={self.DQNetwork.inputs_: states_tp1})
+                    # DOUBLE DQN Logic
+                    # Use DQNNetwork to select the action to take at next_state (a') (action with the highest Q-value)
+                    # Use TargetNetwork to calculate the Q_val of Q(s',a')
+                    # See below in set Q-targets
+
+                    # Get Q values for next_state
+                    q_next_state = sess.run(self.DQNetwork.output, feed_dict={self.DQNetwork.inputs_: states_tp1})
+
+                    # Calculate Qtarget for all actions that state
+                    q_target_next_state = sess.run(self.TargetNetwork.output, feed_dict={
+                                                   self.TargetNetwork.inputs_: states_tp1})
 
                     # set Q-targets
                     for i in range(batch_size):
                         terminal = dones[i]
 
+                        # retrieve a' action from the DDQNPrio
+                        action = np.argmax(q_next_state[i])
+
                         # if we are in a terminal state i.e. if episode ends with s+1, target only equals reward
                         if terminal:
                             target_Qs_batch.append(rewards[i])
                         else:
-                            # otherwise set Q_target = r + gamma * Qtarget(s',a')
-                            target = rewards[i] + gamma * np.max(Qs_next_state[i])
+                            # otherwise take action a' from DDQNetwork
+                            # and set Qtarget = r + GAMMA * TargetNetwork(s',a')
+                            target = rewards[i] + GAMMA * q_target_next_state[i][action]
                             target_Qs_batch.append(target)
 
                     # all mini batch targets
@@ -290,10 +312,17 @@ class Agent:
                     self.writer.add_summary(summary, episode)
                     self.writer.flush()
 
-                # save model every 5 episodes
-                if episode % 5 == 0:
-                    self.saver.save(sess, "./models/{0}/".format(self.level_name), global_step=episode)
-                    print("Model Saved")
+                    if tau > MAX_TAU:
+                        # Update the parameters of our TargetNetwork with DQN_weights
+                        update_target = self.update_target_graph()
+                        sess.run(update_target)
+                        tau = 0
+                        print("Model updated")
+
+                # # save model every 5 episodes
+                # if episode % 5 == 0:
+                #     self.saver.save(sess, "./models/{0}/".format(self.level_name), global_step=episode)
+                #     print("Model Saved")
 
             sorted_scores = sorted(score_tracker, key=lambda ele: ele['xpos'], reverse=True)
             print("Sorted according to MAX XPOS\n", sorted_scores)
@@ -367,3 +396,22 @@ class Agent:
             print("\tMario died! Restarting!", reward)
 
         return killed, reward
+
+    def update_target_graph(self):
+        """
+        # This function helps us to copy one set of variables to another
+        # In our case we use it when we want to copy the parameters of DQN to Target_network
+        # Thanks of the very good implementation of Arthur Juliani https://github.com/awjuliani
+        """
+        # Get the parameters of our DDQNPrio
+        from_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "DDQNPrio")
+
+        # Get the parameters of our Target_network
+        to_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "TargetNetwork")
+
+        op_holder = []
+
+        # Update our target_network parameters with DQNNetwork parameters
+        for from_var, to_var in zip(from_vars, to_vars):
+            op_holder.append(to_var.assign(from_var))
+        return op_holder
