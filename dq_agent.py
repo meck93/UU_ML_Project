@@ -1,6 +1,6 @@
 import environment
 
-from keras.models import Sequential
+from keras.models import Sequential, load_model
 from keras.layers import Conv2D, Dense, Flatten
 from keras.initializers import Orthogonal
 from keras.optimizers import Adam
@@ -10,19 +10,19 @@ import retro
 import gym
 
 import numpy as np
+
 import random
 
 from collections import deque
 
 class DQNAgent:
-    def __init__(self, state_size, action_size):
-        self.state_size = state_size # TODO: Can possibly be removed
+    def __init__(self, action_size):
         self.action_size = action_size
         self.memory = deque(maxlen=1000000)
-        self.gamma = 0.95
+        self.gamma = 0.6
         self.epsilon = 1.0
         self.epsilon_min = 0.01
-        self.epsilon_decay = 0.995
+        self.epsilon_decay = 0.9999
         self.learning_rate = 0.001
         self.model = self._build_model()
 
@@ -34,7 +34,7 @@ class DQNAgent:
         model.add(Flatten())
         model.add(self.fc_layer(512))
         model.add(self.fc_layer(self.action_size, None))
-        model.compile(loss='mse', optimizer='adam', metrics=['accuracy'])
+        model.compile(loss='mse', optimizer=Adam(lr=self.learning_rate))
 
         return model
 
@@ -61,7 +61,10 @@ class DQNAgent:
             act_values = self.model.predict(np.expand_dims(np.array(state), axis=0))
             return np.argmax(act_values[0])
 
-    # TODO: Reshape the state array to the correct dimensions
+    def act_test(self, state):
+        act_values = self.model.predict(np.expand_dims(np.array(state), axis=0))
+        return np.argmax(act_values[0])
+
     def replay(self, batch_size):
         minibatch = random.sample(self.memory, batch_size)
 
@@ -79,40 +82,95 @@ class DQNAgent:
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
 
-# TODO: remove magical numbers, preprocess_frame size
-# TODO: Write function to load the trained model and test it.
-def main():
-    total_episodes = 50
-    max_steps = 50000
-    batch_size = 16
-    episode_render = True
+    def save_model(self, file_name):
+        print("Model saved")
+        self.model.save("trained_models/" + file_name + ".h5")
 
+    def load_model(self, file_name):
+        print("Model loaded")
+        self.model = load_model("trained_models/" + file_name + ".h5")
+
+class Reward:
+    def __init__(self):
+        self.xpos = 24
+        self.time = 298
+
+    def calculate(self, info):
+        new_xpos = info['xpos'] + 255 * info['xpos_multiplier']
+        x_pos_rew, self.xpos = new_xpos - self.xpos, new_xpos
+        time_rew, self.time = self.time - info['time'], info['time']
+        death_rew = 0 if info['lives'] > 3 else -15
+        score_rew = info['score'] / 10
+        reward = x_pos_rew + time_rew + death_rew + score_rew
+
+        if reward > 15:
+            reward = 15
+        elif reward < -15:
+            reward = -15
+
+        return reward
+
+    def reset(self):
+        self.xpos = 24
+        self.time = 298
+
+def test(model_name, total_episodes, episode_render):
     env = environment.make_custom_env(disc_acts=True)
-    agent = DQNAgent([96,96,4], env.action_space.n)
-
+    agent = DQNAgent(env.action_space.n)
+    agent.load_model(model_name)
+    rew = Reward()
 
     for episode in range(total_episodes):
-        step = 0
         episode_rewards = []
+        done = False
         state = env.reset()
+        rew.reset()
 
-        while step < max_steps:
-            step += 1
-
-            action = agent.act(state)
+        while not done:
+            action = agent.act_test(state)
             next_state, reward, done, info = env.step(action)
+            reward = rew.calculate(info)
             episode_rewards.append(reward)
 
             if episode_render:
                 env.render()
 
-            if done:
-                step = max_steps
+            state = next_state
 
+        total_reward = np.sum(episode_rewards)
+
+        print("Episode: {}/{}".format(episode, total_episodes),
+              "Total reward: {}".format(total_reward))
+
+def train(model_name, total_episodes=100, max_steps=500, batch_size=8, episode_render=True):
+    env = environment.make_custom_env(disc_acts=True)
+    agent = DQNAgent(env.action_space.n)
+    rew = Reward()
+
+    for episode in range(total_episodes):
+        step = 0
+        episode_rewards = []
+        state = env.reset()
+        rew.reset()
+
+        while step < max_steps:
+            step += 1
+            action = agent.act(state)
+            next_state, reward, done, info = env.step(action)
+            reward = rew.calculate(info)
+            episode_rewards.append(reward)
+
+            if episode_render:
+                env.render()
+
+            if done or info['lives'] < 4 or step >= max_steps:
+                step = max_steps
                 total_reward = np.sum(episode_rewards)
 
                 print("Episode: {}/{}".format(episode, total_episodes),
-                      "Total reward: {}".format(total_reward))
+                      "Total reward: {}".format(total_reward),
+                      "Exploration rate: {}".format(agent.epsilon))
+                agent.remember(state, action, reward, next_state, done)
             else:
                 agent.remember(state, action, reward, next_state, done)
                 state = next_state
@@ -120,10 +178,9 @@ def main():
             if len(agent.memory) > batch_size:
                 agent.replay(batch_size)
 
-    # TODO: Save model every 10 episodes
-    if episode % 10 == 0:
-        print("Model saved")
+        if episode % 1 == 0:
+            max_steps += 100
+            agent.save_model(model_name)
 
-if __name__ == "__main__":
-    main()
-
+#test("dq_agent_1", total_episodes=10000, episode_render=True)
+train("dq_agent_1", total_episodes=10000, max_steps=500, batch_size=16, episode_render=True)

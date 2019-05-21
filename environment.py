@@ -4,24 +4,23 @@ import numpy as np
 import gym
 import retro
 
-
 from collections import deque
 
 import cv2
 cv2.ocl.setUseOpenCL(False)
 
-
 class PreprocessFrames(gym.ObservationWrapper):
     def __init__(self, env):
         """Warp frames to 96x96."""
         gym.ObservationWrapper.__init__(self, env)
-        self.width = 96
-        self.height = 96
+        self.width = 84
+        self.height = 57
         self.observation_space = gym.spaces.Box(low=0, high=255,
                                                 shape=(self.height, self.width, 1), dtype=np.uint8)
 
     def observation(self, frame):
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+        frame = frame[40:-40,:]
         frame = cv2.resize(frame, (self.width, self.height),
                            interpolation=cv2.INTER_AREA)
         return frame[:, :, None]
