@@ -4,15 +4,12 @@ import gym
 import numpy as np
 import retro
 import tensorflow as tf
-# openai baselines
 from baselines.common.schedules import LinearSchedule
-from baselines.deepq.replay_buffer import PrioritizedReplayBuffer, ReplayBuffer
+from baselines.deepq.replay_buffer import PrioritizedReplayBuffer
 
 from config import *
-# custom Mario environment
-from environment import make_custom_env
-# DeepQNetwork and Memory
-from model import DQNetwork, DQNetworkPrio
+from environment import make_custom_env  # custom Mario environment
+from model import DDQNPrio
 from utils import ReplayMemory
 
 
@@ -31,7 +28,13 @@ class Agent:
         tf.reset_default_graph()
 
         # instantiate the DQNetwork
-        self.DQNetwork = DQNetworkPrio(state_size, self.env.action_space.n, learning_rate)
+        self.DQNetwork = DDQNPrio(state_size, self.env.action_space.n, learning_rate, name="DDQNPrio")
+
+        # instantiate the TargetNetwork
+        self.TargetNetwork = DDQNPrio(state_size, self.env.action_space.n, learning_rate, name="TargetNetwork")
+
+        # instantiate a linear decay schedule for the exploration rate
+        self.epsilon_schedule = LinearSchedule(DECAY_STEPS, initial_p=EXPLORE_START, final_p=EXPLORE_STOP)
 
         # instantiate memory
         self.memory = PrioritizedReplayBuffer(size=memory_size, alpha=REPLAY_ALPHA)
@@ -50,7 +53,7 @@ class Agent:
         # set the initial number of lives
         self.lives = 4
 
-        # initialize the memory
+        # initialize the memory: fill the memory with experiences
         for i in range(pretrain_length):
             if i == 0:
                 print("Initializing Memory with {} experiences!".format(pretrain_length))
@@ -105,12 +108,15 @@ class Agent:
                 # our new state is now the next_state
                 state = next_state
 
-    def predict_action(self, sess, explore_start, explore_stop, decay_rate, decay_step, state, actions):
+    def predict_action(self, sess, state, actions, t):
         # first we randomize a number
         exp_tradeoff = np.random.rand()
 
         # compute the current exploration probability
-        explore_probability = explore_stop + (explore_start - explore_stop) * np.exp(-decay_rate * decay_step)
+        # exponential decay
+        # explore_probability = EXPLORE_STOP + (EXPLORE_START - EXPLORE_STOP) * np.exp(-DECAY_RATE * decay_step)
+        # linear decay
+        explore_probability = self.epsilon_schedule.value(t)
 
         if explore_probability > exp_tradeoff:
             # make a random action
@@ -129,61 +135,6 @@ class Agent:
 
         return action, choice, explore_probability
 
-    def play(self):
-        with tf.Session() as sess:
-            total_test_rewards = []
-
-            # Load the model
-            path = "./models/{}/".format(self.level_name)
-            self.saver = tf.train.import_meta_graph("{}-145.meta".format(path))
-            self.saver.restore(sess, tf.train.latest_checkpoint(path))
-
-            for episode in range(1):
-                total_rewards = 0
-                step = 0
-
-                state = self.env.reset()
-
-                print("****************************************************")
-                print("EPISODE ", episode)
-
-                while step < MAX_STEPS:
-                    step += 1
-
-                    # transform LazyFrames into np array [None, HEIGHT, WIDTH, N_FRAMES]
-                    state = np.array(state)
-
-                    # estimate the Qs values state
-                    Qs = sess.run(self.DQNetwork.output, feed_dict={
-                                  self.DQNetwork.inputs_: state.reshape((1, *state.shape))})
-
-                    # take the biggest Q value (= best action)
-                    choice = np.argmax(Qs)
-                    action = self.possible_actions[choice]
-                    print(step, choice, Qs)
-
-                    # perform the action and get the next_state, reward, and done information
-                    next_state, reward, done, info = self.env.step(choice)
-
-                    # check if Mario is still alive
-                    killed, reward = self.check_killed(int(info['lives']), reward)
-
-                    # store the current reward
-                    total_rewards += reward
-
-                    # update the current state
-                    state = next_state
-
-                    # render the current state
-                    self.env.render()
-
-                    if done or killed:
-                        print("Score", total_rewards)
-                        total_test_rewards.append(total_rewards)
-                        break
-
-            self.env.close()
-
     def train(self):
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True  # pylint: disable=no-member
@@ -192,12 +143,20 @@ class Agent:
             # initialize the variables
             sess.run(tf.global_variables_initializer())
 
-            # initialize decay rate (that will be used to reduce epsilon)
-            decay_step = 0
+            # initialize decay step and tau
             t = 0
+            tau = 0
+
+            # Update the parameters of our TargetNetwork with DQN_weights
+            update_target = self.update_target_graph()
+            sess.run(update_target)
 
             # score tracker
             score_tracker = []
+
+            print("Total Number of Steps:", TOTAL_TIMESTEPS)
+            print("Full Priority Replay after {} steps".format(REPLAY_BETA0_ITERS))
+            print("Exploration Probability @ {} after: {} steps".format(EXPLORE_STOP, DECAY_STEPS))
 
             for episode in range(TOTAL_EPISODES):
                 # set step to 0
@@ -208,6 +167,7 @@ class Agent:
 
                 # initialize the x0 - previous position - to 24 (initial position)
                 x0 = 24
+                x1 = 24
 
                 # initialize stuck to False
                 stuck = False
@@ -226,13 +186,10 @@ class Agent:
                 while step < MAX_STEPS:
                     step += 1
                     t += 1
-
-                    # increase decay_step
-                    decay_step += 1
+                    tau += 1
 
                     # predict an action
-                    action, choice, explore_probability = self.predict_action(
-                        sess, explore_start, explore_stop, decay_rate, decay_step, state, self.possible_actions)
+                    action, choice, explore_probability = self.predict_action(sess, state, self.possible_actions, t)
 
                     # perform the action and get the next_state, reward, and done information
                     next_state, reward, done, info = self.env.step(choice)
@@ -240,18 +197,19 @@ class Agent:
                     if episode_render:
                         self.env.render()
 
-                    # compute the current x_position
-                    x1 = self._current_xpos(int(info['xpos']), int(info['xpos_multiplier']))
+                    # check if Mario is still alive
+                    killed, reward = self.check_killed(int(info['lives']), reward)
 
-                    # compute the positional reward
-                    x0, reward = self.x_pos_reward(x1, x0, reward)
+                    if not killed:
+                        # compute the current x_position
+                        x1 = self._current_xpos(int(info['xpos']), int(info['xpos_multiplier']))
+
+                        # compute the positional reward
+                        x0, reward = self.x_pos_reward(x1, x0, reward)
 
                     # check if Mario is stuck
                     if step % STUCK_STEPS == 0:
                         stuck, reward = self.check_stuck(x1, stuck_pos_cp, reward)
-
-                    # check if Mario is still alive
-                    killed, reward = self.check_killed(int(info['lives']), reward)
 
                     # check if Mario has finished the level
                     if done:
@@ -262,7 +220,7 @@ class Agent:
                         print("\tMax Steps per Episode reached.")
 
                     # TODO: implement time penality for taking too long....
-                    if t % 10 == 0:
+                    if t % TIME_DECAY_PENALTY == 0:
                         reward -= 1.0
 
                     # add the reward to total reward
@@ -279,7 +237,7 @@ class Agent:
                         total_reward = np.sum(episode_rewards)
                         average_loss = np.mean(episode_loss)
 
-                        print("Episode:", episode, "Total Steps:", t, "Total reward:", total_reward,
+                        print("Episode:", episode, "Total Steps:", t, "Total reward:", total_reward, "Xpos:", x0,
                               "Explore P:", explore_probability, "Average Training Loss:", average_loss)
 
                         # remember the episode and the score
@@ -301,19 +259,32 @@ class Agent:
 
                     target_Qs_batch = []
 
-                    # get Q values for the states_tp1 (next states)
-                    Qs_next_state = sess.run(self.DQNetwork.output, feed_dict={self.DQNetwork.inputs_: states_tp1})
+                    # DOUBLE DQN Logic
+                    # Use DQNNetwork to select the action to take at next_state (a') (action with the highest Q-value)
+                    # Use TargetNetwork to calculate the Q_val of Q(s',a')
+                    # See below in set Q-targets
+
+                    # Get Q values for next_state
+                    q_next_state = sess.run(self.DQNetwork.output, feed_dict={self.DQNetwork.inputs_: states_tp1})
+
+                    # Calculate Qtarget for all actions that state
+                    q_target_next_state = sess.run(self.TargetNetwork.output, feed_dict={
+                                                   self.TargetNetwork.inputs_: states_tp1})
 
                     # set Q-targets
                     for i in range(batch_size):
                         terminal = dones[i]
 
+                        # retrieve a' action from the DDQNPrio
+                        action = np.argmax(q_next_state[i])
+
                         # if we are in a terminal state i.e. if episode ends with s+1, target only equals reward
                         if terminal:
                             target_Qs_batch.append(rewards[i])
                         else:
-                            # otherwise set Q_target = r + gamma * Qtarget(s',a')
-                            target = rewards[i] + gamma * np.max(Qs_next_state[i])
+                            # otherwise take action a' from DDQNetwork
+                            # and set Qtarget = r + GAMMA * TargetNetwork(s',a')
+                            target = rewards[i] + GAMMA * q_target_next_state[i][action]
                             target_Qs_batch.append(target)
 
                     # all mini batch targets
@@ -341,10 +312,17 @@ class Agent:
                     self.writer.add_summary(summary, episode)
                     self.writer.flush()
 
-                # save model every 5 episodes
-                if episode % 5 == 0:
-                    self.saver.save(sess, "./models/{0}/".format(self.level_name), global_step=episode)
-                    print("Model Saved")
+                    if tau > MAX_TAU:
+                        # Update the parameters of our TargetNetwork with DQN_weights
+                        update_target = self.update_target_graph()
+                        sess.run(update_target)
+                        tau = 0
+                        print("Model updated")
+
+                # # save model every 5 episodes
+                # if episode % 5 == 0:
+                #     self.saver.save(sess, "./models/{0}/".format(self.level_name), global_step=episode)
+                #     print("Model Saved")
 
             sorted_scores = sorted(score_tracker, key=lambda ele: ele['xpos'], reverse=True)
             print("Sorted according to MAX XPOS\n", sorted_scores)
@@ -418,3 +396,22 @@ class Agent:
             print("\tMario died! Restarting!", reward)
 
         return killed, reward
+
+    def update_target_graph(self):
+        """
+        # This function helps us to copy one set of variables to another
+        # In our case we use it when we want to copy the parameters of DQN to Target_network
+        # Thanks of the very good implementation of Arthur Juliani https://github.com/awjuliani
+        """
+        # Get the parameters of our DDQNPrio
+        from_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "DDQNPrio")
+
+        # Get the parameters of our Target_network
+        to_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "TargetNetwork")
+
+        op_holder = []
+
+        # Update our target_network parameters with DQNNetwork parameters
+        for from_var, to_var in zip(from_vars, to_vars):
+            op_holder.append(to_var.assign(from_var))
+        return op_holder
