@@ -52,7 +52,6 @@ class DQNAgent:
                      kernel_initializer=Orthogonal())
 
     def remember(self, state, action, reward, next_state, done):
-        self.memory.clear()
         self.memory.append((state, action, reward, next_state, done))
 
     def act(self, state):
@@ -62,8 +61,8 @@ class DQNAgent:
             act_values = self.model.predict(np.expand_dims(np.array(state), axis=0))
             return np.argmax(act_values[0])
 
-    def replay(self):
-        minibatch = random.sample(self.memory, len(self.memory))
+    def replay(self, batch_size):
+        minibatch = random.sample(self.memory, batch_size)
 
         for state, action, reward, next_state, done in minibatch:
             target = self.model.predict(np.expand_dims(np.array(state), axis=0))
@@ -114,7 +113,8 @@ class Reward:
 def test(model_name, total_episodes, episode_render):
     env = environment.make_custom_env(disc_acts=True)
     agent = DQNAgent(env.action_space.n)
-#    agent.load_model(model_name)
+    agent.load_model(model_name)
+    agent.epsilon = 0.1
     rew = Reward()
 
     for episode in range(total_episodes):
@@ -127,8 +127,6 @@ def test(model_name, total_episodes, episode_render):
             action = agent.act(state)
             next_state, reward, done, info = env.step(action)
             reward = rew.calculate(info)
-            agent.remember(state, action, reward, next_state, done)
-            agent.replay()
             episode_rewards.append(reward)
 
             if episode_render:
@@ -182,5 +180,5 @@ def train(model_name, total_episodes=100, max_steps=500, batch_size=8, episode_r
             max_steps += 100
             agent.save_model(model_name)
 
-test("dq_agent_1", total_episodes=10000, episode_render=True)
-#train("dq_agent_1", total_episodes=10000, max_steps=500, batch_size=32, episode_render=True)
+#test("dq_agent_1", total_episodes=10000, episode_render=True)
+train("dq_agent_1", total_episodes=10000, max_steps=500, batch_size=32, episode_render=True)
