@@ -117,25 +117,25 @@ class DDQNPrio:
             # remember that target_Q is the R(s,a) + ymax Qhats(s', a')
             self.target_Q = tf.placeholder(tf.float32, [None], name="target")
 
-            self.conv1 = tf.layers.conv2d(inputs=self.inputs_, filters=32, kernel_size=[8, 8], strides=[4, 4],
-                                          padding="valid",                                                                     kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(), name="conv1")
-            self.conv1_out = tf.nn.elu(self.conv1, name="conv1_out")
+            self.conv1 = tf.layers.conv2d(inputs=self.inputs_, filters=32, kernel_size=[4, 4], strides=[2, 2],
+                                          padding="valid",                                                                     kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(),
+                                          activation="elu", name="conv1")
 
-            self.conv2 = tf.layers.conv2d(inputs=self.conv1_out, filters=64, kernel_size=[4, 4], strides=[2, 2],
+            self.conv2 = tf.layers.conv2d(inputs=self.conv1, filters=64, kernel_size=[4, 4], strides=[1, 1],
                                           padding="valid",
-                                          kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(), name="conv2")
-            self.conv2_out = tf.nn.elu(self.conv2, name="conv2_out")
+                                          kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(),
+                                          activation="elu", name="conv2")
 
-            self.conv3 = tf.layers.conv2d(inputs=self.conv2_out, filters=64, kernel_size=[3, 3], strides=[1, 1],
+            self.conv3 = tf.layers.conv2d(inputs=self.conv2, filters=64, kernel_size=[4, 4], strides=[1, 1],
                                           padding="valid",
-                                          kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(), name="conv3")
-            self.conv3_out = tf.nn.elu(self.conv3, name="conv3_out")
+                                          kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(),
+                                          activation="elu", name="conv3")
 
-            self.flatten = tf.contrib.layers.flatten(self.conv3_out)
+            self.flatten = tf.contrib.layers.flatten(self.conv3)
 
             # Here we separate into two streams (DDQN)
             # The one that calculate value: V(s)
-            self.value_fc = tf.layers.dense(inputs=self.flatten, units=512, activation=tf.nn.elu,
+            self.value_fc = tf.layers.dense(inputs=self.flatten, units=256, activation=tf.nn.elu,
                                             kernel_initializer=tf.contrib.layers.xavier_initializer(),
                                             name="value_fc")
 
@@ -144,7 +144,7 @@ class DDQNPrio:
                                          name="value")
 
             # The one that calculate action: A(s,a)
-            self.advantage_fc = tf.layers.dense(inputs=self.flatten, units=512, activation=tf.nn.elu,
+            self.advantage_fc = tf.layers.dense(inputs=self.flatten, units=256, activation=tf.nn.elu,
                                                 kernel_initializer=tf.contrib.layers.xavier_initializer(),
                                                 name="advantage_fc")
 

@@ -24,11 +24,8 @@ class PreprocessFrames(gym.ObservationWrapper):
         # crop the image top and bottom since it's static
         frame_cropped = frame_gray[9:-35, :]
 
-        # normalize the values to range [0,1]
-        frame_normalized = frame_cropped / 255.0
-
         # resize the cropped image to WIDTHxHEIGHT
-        frame = cv2.resize(frame_normalized, (self.width, self.height), interpolation=cv2.INTER_AREA)
+        frame = cv2.resize(frame_cropped, (self.width, self.height), interpolation=cv2.INTER_AREA)
         return frame[:, :, None]
 
 
@@ -45,8 +42,8 @@ class MarioDiscretizer(gym.ActionWrapper):
 
         # Custom discrete actions defined by ourselves
         # Limits the number of possible actions and should improve training time
-        # actions = [[None], ['LEFT'], ['RIGHT'], ['RIGHT', 'A'], ['RIGHT', 'B'], ['RIGHT', 'A', 'B'], ['A'], ['A', 'A']]
-        actions = [[None], ['LEFT'], ['RIGHT'], ['RIGHT', 'A'], ['A'], ['A', 'A']]
+        actions = [[None], ['LEFT'], ['RIGHT'], ['RIGHT', 'A'], ['RIGHT', 'B'], ['RIGHT', 'A', 'B'], ['A']]
+        # actions = [[None], ['LEFT'], ['RIGHT'], ['RIGHT', 'A'], ['A']]
         self._actions = []
 
         for action in actions:
@@ -67,7 +64,7 @@ def make_custom_env(disc_acts=True):
     Create an environment with some standard wrappers.
     """
     env = retro.make(game='SuperMarioBros3-Nes', state="1Player.World1.Level1.state",
-                     scenario="./data/scenario.json", record="./recordings/")
+                     scenario="./data/scenario.json", record="./recordings/V2/")
 
     if disc_acts:
         # Build the actions array

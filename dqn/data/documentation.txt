@@ -87,7 +87,59 @@ Run: Prio10
 - batch size: 32
 - memory: 50'000
 - xpos reward: custom (dying = -50.0)
-- gamma: 0.95
+- gamma: 0.97
 - coins + killing only gives +5.0 reward (up and until now it was +100.0)
+- linear schedule exploration rate
+- time penality every 50 steps 
+
+Run: Prio11
+- 500 episodes
+- max steps 7500
+- stuck: 1000
+- batch size: 32
+- memory: 50'000
+- xpos reward: custom (dying = -25.0)
+- gamma: 0.95
+- environment (less actions without A + A)
+- coins + killing only gives +1.0 reward (up and until now it was +100.0)
+- linear schedule exploration rate
+- time penality every 50 steps 
+
+Run: Prio12
+- 750 episodes
+- max steps 7500
+- stuck: 1000
+- batch size: 32
+- memory: 50'000
+- xpos reward: custom (dying = -25.0)
+- gamma: 0.95
+- environment (less actions without A + A)
+- coins + killing only gives +1.0 reward (up and until now it was +100.0)
+- linear schedule exploration rate
+- time penality every 50 steps 
+
+Run: Prio13
+- 750 episodes
+- max steps 7500
+- stuck: 1000
+- batch size: 32
+- memory: 50'000
+- xpos reward: custom (dying = -25.0)
+- gamma: 0.95
+- environment (less actions without A + A)
+- coins + killing only gives +1.0 reward (up and until now it was +100.0)
+- linear schedule exploration rate
+- time penality every 50 steps 
+
+Run: Test
+- 800 episodes
+- max steps 8000
+- stuck: 1000
+- batch size: 32
+- memory: 50'000
+- xpos reward: custom (dying = -25.0)
+- gamma: 0.95
+- environment (less actions without A + A)
+- coins + killing only gives +1.0 reward (up and until now it was +100.0)
 - linear schedule exploration rate
 - time penality every 50 steps 

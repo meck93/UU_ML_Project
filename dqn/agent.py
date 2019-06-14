@@ -1,3 +1,4 @@
+import json
 import random
 
 import gym
@@ -10,7 +11,6 @@ from baselines.deepq.replay_buffer import PrioritizedReplayBuffer
 from config import *
 from environment import make_custom_env  # custom Mario environment
 from model import DDQNPrio
-from utils import ReplayMemory
 
 
 class Agent:
@@ -85,6 +85,10 @@ class Agent:
             # check if Mario is still alive
             killed, reward = self.check_killed(int(info['lives']), reward)
 
+            # convert types to as small as possible to save space
+            reward = np.int16(reward)
+            action = np.uint8(action)
+
             if done or killed or stuck:
                 # we inished the episode
                 next_state = np.zeros((HEIGHT, WIDTH, N_FRAMES), dtype=np.int)
@@ -125,6 +129,8 @@ class Agent:
         else:
             # transform LazyFrames into np array [None, HEIGHT, WIDTH, N_FRAMES]
             state = np.array(state)
+            # normalize the values to range [0,1]
+            state = state / 255.0
 
             # estimate the Qs values state
             Qs = sess.run(self.DQNetwork.output, feed_dict={self.DQNetwork.inputs_: state.reshape((1, *state.shape))})
@@ -153,6 +159,13 @@ class Agent:
 
             # score tracker
             score_tracker = []
+
+            writer = open("./models/{}.txt".format(self.level_name), "w")
+            writer.write("Model: {}\n\n".format(self.level_name))
+            writer.write("Total Number of Steps: {}\n".format(TOTAL_TIMESTEPS))
+            writer.write("Full Priority Replay after {} steps\n".format(REPLAY_BETA0_ITERS))
+            writer.write("Exploration Probability @ {} after: {} steps\n\n".format(EXPLORE_STOP, DECAY_STEPS))
+            writer.flush()
 
             print("Total Number of Steps:", TOTAL_TIMESTEPS)
             print("Full Priority Replay after {} steps".format(REPLAY_BETA0_ITERS))
@@ -223,6 +236,10 @@ class Agent:
                     if t % TIME_DECAY_PENALTY == 0:
                         reward -= 1.0
 
+                    # convert types to as small as possible to save space
+                    reward = np.int16(reward)
+                    action = np.uint8(action)
+
                     # add the reward to total reward
                     episode_rewards.append(reward)
 
@@ -239,6 +256,9 @@ class Agent:
 
                         print("Episode:", episode, "Total Steps:", t, "Total reward:", total_reward, "Xpos:", x0,
                               "Explore P:", explore_probability, "Average Training Loss:", average_loss)
+                        writer.write("Epsiode: {}\t Steps: {}\t Reward: {}\t Xpos: {}\t Explore P: {:2.5f}\t Avg Train Loss: {}\n".format(
+                            episode, t, total_reward, x0, explore_probability, average_loss))
+                        writer.flush()
 
                         # remember the episode and the score
                         score_tracker.append({"episode": episode, "reward": total_reward, "xpos": x0})
@@ -258,6 +278,10 @@ class Agent:
                     (states_t, actions, rewards, states_tp1, dones, weights, idxes) = experience
 
                     target_Qs_batch = []
+
+                    # normalize the values to range [0,1]
+                    states_t = states_t / 255.0
+                    states_tp1 = states_tp1 / 255.0
 
                     # DOUBLE DQN Logic
                     # Use DQNNetwork to select the action to take at next_state (a') (action with the highest Q-value)
@@ -325,9 +349,20 @@ class Agent:
                 #     print("Model Saved")
 
             sorted_scores = sorted(score_tracker, key=lambda ele: ele['xpos'], reverse=True)
-            print("Sorted according to MAX XPOS\n", sorted_scores)
+            writer.write("\n")
+            writer.writelines(json.dumps(sorted_scores))
+            writer.write("\n")
+            print("Sorted according to MAX XPOS\n\n", sorted_scores)
+
             sorted_scores = sorted(score_tracker, key=lambda ele: ele['reward'], reverse=True)
+            writer.write("\n")
+            writer.writelines(json.dumps(sorted_scores))
+            writer.write("\n")
             print("Sorted according to MAX REWARD\n", sorted_scores)
+
+            writer.flush()
+            writer.close()
+
             self.env.close()
 
     def _current_xpos(self, xpos, xpos_multiplier):
